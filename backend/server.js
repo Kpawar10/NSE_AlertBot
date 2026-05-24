@@ -1,9 +1,9 @@
 /**
  * NSE Stock Alert Backend
  * ========================
- * WhatsApp : CallMeBot        (FREE forever, no account needed)
- * SMS      : Android Gateway  (FREE forever, uses your own SIM)
- * Prices   : Simulated        (realistic NSE price movement)
+ * WhatsApp : Meta WhatsApp Cloud API (FREE 1000 conversations/month)
+ * SMS      : Android Phone Gateway   (FREE forever, uses your own SIM)
+ * Prices   : Simulated realistic NSE movement
  */
 
 require("dotenv").config();
@@ -50,7 +50,6 @@ const NSE_STOCKS = [
   { symbol: "POWERGRID",  name: "Power Grid Corporation",    basePrice: 322.40  },
 ];
 
-// Initialize stock prices
 NSE_STOCKS.forEach((s) => {
   stockPrices[s.symbol] = {
     symbol: s.symbol, name: s.name,
@@ -64,12 +63,12 @@ NSE_STOCKS.forEach((s) => {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatINR(n) {
-  return "₹" + Number(n).toLocaleString("en-IN", {
+  return "Rs." + Number(n).toLocaleString("en-IN", {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
   });
 }
 
-// ─── Price Simulation (realistic NSE movement) ────────────────────────────────
+// ─── Price Simulation ─────────────────────────────────────────────────────────
 function simulatePrices() {
   NSE_STOCKS.forEach((s) => {
     const c     = stockPrices[s.symbol];
@@ -87,95 +86,119 @@ function simulatePrices() {
     };
   });
   lastPriceUpdate = new Date().toISOString();
-  console.log(`[${new Date().toLocaleTimeString("en-IN")}] 📊 Prices updated`);
+  console.log(`[${new Date().toLocaleTimeString("en-IN")}] Prices updated`);
 }
 
-// ─── 💬 CALLMEBOT — Free WhatsApp (forever) ───────────────────────────────────
-// How it works: calls CallMeBot's free API which forwards message to your WhatsApp
-async function sendWhatsApp(phone, message) {
-  const apiKey = process.env.CALLMEBOT_API_KEY;
+// ─── META WHATSAPP CLOUD API ──────────────────────────────────────────────────
+// Endpoint: https://graph.facebook.com/v19.0/PHONE_NUMBER_ID/messages
+// Free tier: 1000 conversations per month from Meta
+// Docs: https://developers.facebook.com/docs/whatsapp/cloud-api
 
-  if (!apiKey || apiKey === "YOUR_CALLMEBOT_KEY") {
-    console.log(`\n[WhatsApp MOCK - not configured]\nTo: ${phone}\n${message}\n`);
+async function sendWhatsApp(toPhone, message) {
+  const token         = process.env.META_WHATSAPP_TOKEN;
+  const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+
+  // Mock mode if not configured
+  if (!token || token === "YOUR_META_TOKEN" || !phoneNumberId || phoneNumberId === "YOUR_PHONE_NUMBER_ID") {
+    console.log(`\n[WhatsApp MOCK - configure META keys in .env]\nTo: ${toPhone}\n${message}\n`);
     return { success: true, mock: true };
   }
 
   try {
-    // CallMeBot needs phone without + sign
-    const cleanPhone = phone.replace(/^\+/, "");
-    const encoded    = encodeURIComponent(message);
-    const url = `https://api.callmebot.com/whatsapp.php?phone=${cleanPhone}&text=${encoded}&apikey=${apiKey}`;
+    // Meta requires phone in international format without + (e.g. 919876543210)
+    const cleanPhone = toPhone.replace(/^\+/, "").replace(/\s/g, "");
 
-    const { data } = await axios.get(url, { timeout: 15000 });
-    console.log(`✅ WhatsApp sent to ${phone}`);
-    return { success: true, response: String(data).substring(0, 100) };
+    const { data } = await axios.post(
+      `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+      {
+        messaging_product: "whatsapp",
+        recipient_type:    "individual",
+        to:                cleanPhone,
+        type:              "text",
+        text: {
+          preview_url: false,
+          body:        message,
+        },
+      },
+      {
+        headers: {
+          Authorization:  `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      }
+    );
+
+    console.log(`WhatsApp sent to ${toPhone} | Message ID: ${data.messages?.[0]?.id}`);
+    return { success: true, messageId: data.messages?.[0]?.id };
   } catch (err) {
-    console.error(`❌ WhatsApp error: ${err.message}`);
-    return { success: false, error: err.message };
+    const errMsg = err.response?.data?.error?.message || err.message;
+    console.error(`WhatsApp failed to ${toPhone}: ${errMsg}`);
+    return { success: false, error: errMsg };
   }
 }
 
-// ─── 📱 ANDROID SMS GATEWAY — Free SMS (uses your own SIM) ───────────────────
-// How it works: Android app on your phone exposes a local API
-// Your server calls that API → app sends SMS using your SIM for free
-async function sendSMS(phone, message) {
+// ─── ANDROID SMS GATEWAY ──────────────────────────────────────────────────────
+// Free forever — your Android phone sends SMS using your own SIM card
+// App: "SMS Gateway for Android" by Igor Polishchuk (Play Store)
+
+async function sendSMS(toPhone, message) {
   const gatewayUrl  = process.env.SMS_GATEWAY_URL;
   const gatewayUser = process.env.SMS_GATEWAY_USER || "admin";
   const gatewayPass = process.env.SMS_GATEWAY_PASS || "admin";
 
   if (!gatewayUrl || gatewayUrl === "http://YOUR_PHONE_IP:8080") {
-    console.log(`\n[SMS MOCK - not configured]\nTo: ${phone}\n${message}\n`);
+    console.log(`\n[SMS MOCK - configure SMS_GATEWAY_URL in .env]\nTo: ${toPhone}\n${message}\n`);
     return { success: true, mock: true };
   }
 
   try {
-    // Android SMS Gateway API format
     const { data } = await axios.post(
       `${gatewayUrl}/message`,
-      {
-        phone_number: phone,
-        message:      message.substring(0, 160), // SMS limit
-      },
+      { phone_number: toPhone, message: message.substring(0, 160) },
       {
         auth:    { username: gatewayUser, password: gatewayPass },
         headers: { "Content-Type": "application/json" },
         timeout: 15000,
       }
     );
-    console.log(`✅ SMS sent to ${phone} via Android Gateway`);
+    console.log(`SMS sent to ${toPhone} via Android Gateway`);
     return { success: true, data };
   } catch (err) {
-    console.error(`❌ SMS Gateway error: ${err.message}`);
+    console.error(`SMS failed to ${toPhone}: ${err.message}`);
     return { success: false, error: err.message };
   }
 }
 
 // ─── Message Builder ──────────────────────────────────────────────────────────
 function buildMessages(alert, stock) {
-  const conditionText = {
-    above:       `📈 Price crossed ABOVE ${formatINR(alert.value)}`,
-    below:       `📉 Price dropped BELOW ${formatINR(alert.value)}`,
-    change_up:   `🚀 Gained more than +${alert.value}%`,
-    change_down: `💥 Fell more than -${Math.abs(alert.value)}%`,
-  }[alert.type] || "";
+  const ist = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
 
-  // WhatsApp message (supports emoji and formatting)
+  const conditionMap = {
+    above:       `Price crossed ABOVE ${formatINR(alert.value)}`,
+    below:       `Price dropped BELOW ${formatINR(alert.value)}`,
+    change_up:   `Gained more than +${alert.value}%`,
+    change_down: `Fell more than -${Math.abs(alert.value)}%`,
+  };
+  const cond = conditionMap[alert.type] || "";
+
+  // WhatsApp message (plain text, Meta API doesn't support markdown in free tier)
   const whatsapp =
-    `🚨 *NSE STOCK ALERT*\n\n` +
-    `*${stock.symbol}* — ${stock.name}\n` +
-    `${conditionText}\n\n` +
-    `💰 Current Price: *${formatINR(stock.price)}*\n` +
-    `📊 Change: ${stock.changePct >= 0 ? "+" : ""}${stock.changePct}% ` +
+    `🚨 NSE STOCK ALERT\n\n` +
+    `Stock: ${stock.symbol} (${stock.name})\n` +
+    `Alert: ${cond}\n\n` +
+    `Current Price: ${formatINR(stock.price)}\n` +
+    `Change: ${stock.changePct >= 0 ? "+" : ""}${stock.changePct}% ` +
     `(${formatINR(stock.change)})\n` +
-    `📅 ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}\n\n` +
-    `_Sent by NSE AlertBot_`;
+    `High: ${formatINR(stock.high)} | Low: ${formatINR(stock.low)}\n\n` +
+    `Time (IST): ${ist}\n` +
+    `-- NSE AlertBot`;
 
-  // SMS message (plain text, max 160 chars)
+  // SMS (max 160 chars)
   const sms =
-    `NSE ALERT: ${stock.symbol} | ` +
-    `${alert.type === "above" ? "Above" : alert.type === "below" ? "Below" : alert.type === "change_up" ? "Up" : "Down"} ` +
-    `${alert.type.includes("change") ? alert.value + "%" : formatINR(alert.value)} | ` +
-    `Now: ${formatINR(stock.price)} (${stock.changePct >= 0 ? "+" : ""}${stock.changePct}%)`;
+    `NSE ALERT: ${stock.symbol} | ${cond} | ` +
+    `Price: ${formatINR(stock.price)} | ` +
+    `${stock.changePct >= 0 ? "+" : ""}${stock.changePct}%`;
 
   return { whatsapp, sms };
 }
@@ -192,108 +215,92 @@ async function fireAlert(alert, stock) {
     results.sms = await sendSMS(alert.phone, smsMsg);
   }
 
-  // Mark as fired
   alerts = alerts.map((a) =>
     a.id === alert.id
       ? { ...a, fired: true, firedAt: new Date().toISOString() }
       : a
   );
 
-  // Add to triggered history
   const entry = {
-    id:        uuidv4(),
-    alertId:   alert.id,
-    symbol:    stock.symbol,
-    name:      stock.name,
-    price:     stock.price,
-    changePct: stock.changePct,
+    id:              uuidv4(),
+    alertId:         alert.id,
+    symbol:          stock.symbol,
+    name:            stock.name,
+    price:           stock.price,
+    changePct:       stock.changePct,
     whatsappMessage: waMsg,
     smsMessage:      smsMsg,
-    channel:   alert.channel,
-    phone:     alert.phone,
+    channel:         alert.channel,
+    phone:           alert.phone,
     results,
-    firedAt:   new Date().toISOString(),
+    firedAt:         new Date().toISOString(),
   };
   triggeredLog.unshift(entry);
 
-  console.log(`\n🔔 ALERT FIRED: ${alert.symbol} | ${alert.type} | target: ${alert.value}`);
+  console.log(`ALERT FIRED: ${alert.symbol} | ${alert.type} | target: ${alert.value}`);
   return entry;
 }
 
-// ─── Alert Engine (checks every 60 seconds) ───────────────────────────────────
+// ─── Alert Engine ─────────────────────────────────────────────────────────────
 async function checkAlerts() {
   const active = alerts.filter((a) => !a.fired);
   if (!active.length) return;
 
-  await Promise.all(
-    active.map(async (alert) => {
-      const stock = stockPrices[alert.symbol];
-      if (!stock) return;
+  await Promise.all(active.map(async (alert) => {
+    const stock = stockPrices[alert.symbol];
+    if (!stock) return;
 
-      let shouldFire = false;
-      if (alert.type === "above"       && stock.price    >=  alert.value)             shouldFire = true;
-      if (alert.type === "below"       && stock.price    <=  alert.value)             shouldFire = true;
-      if (alert.type === "change_up"   && stock.changePct >=  alert.value)            shouldFire = true;
-      if (alert.type === "change_down" && stock.changePct <= -Math.abs(alert.value))  shouldFire = true;
+    let shouldFire = false;
+    if (alert.type === "above"       && stock.price     >=  alert.value)            shouldFire = true;
+    if (alert.type === "below"       && stock.price     <=  alert.value)            shouldFire = true;
+    if (alert.type === "change_up"   && stock.changePct >=  alert.value)            shouldFire = true;
+    if (alert.type === "change_down" && stock.changePct <= -Math.abs(alert.value))  shouldFire = true;
 
-      if (shouldFire) await fireAlert(alert, stock);
-    })
-  );
+    if (shouldFire) await fireAlert(alert, stock);
+  }));
 }
 
-// ─── Cron: runs every 60 seconds ─────────────────────────────────────────────
+// ─── Cron: every 60 seconds ───────────────────────────────────────────────────
 cron.schedule("* * * * *", async () => {
   simulatePrices();
   await checkAlerts();
 });
-
-// Run once on startup
 simulatePrices();
 checkAlerts();
 
-// ─── REST API ROUTES ──────────────────────────────────────────────────────────
+// ─── REST API ─────────────────────────────────────────────────────────────────
+app.get("/api/health", (req, res) => res.json({
+  status:             "ok",
+  uptime:             Math.floor(process.uptime()),
+  lastPriceUpdate,
+  activeAlerts:       alerts.filter((a) => !a.fired).length,
+  totalAlerts:        alerts.length,
+  triggeredCount:     triggeredLog.length,
+  whatsappConfigured: !!(process.env.META_WHATSAPP_TOKEN     && process.env.META_WHATSAPP_TOKEN     !== "YOUR_META_TOKEN"),
+  smsConfigured:      !!(process.env.SMS_GATEWAY_URL         && process.env.SMS_GATEWAY_URL         !== "http://YOUR_PHONE_IP:8080"),
+  phoneNumberId:      process.env.META_PHONE_NUMBER_ID       || "not set",
+  timestamp:          new Date().toISOString(),
+}));
 
-// Health check
-app.get("/api/health", (req, res) => {
-  res.json({
-    status:              "ok",
-    uptime:              Math.floor(process.uptime()),
-    lastPriceUpdate,
-    activeAlerts:        alerts.filter((a) => !a.fired).length,
-    totalAlerts:         alerts.length,
-    triggeredCount:      triggeredLog.length,
-    whatsappConfigured:  !!(process.env.CALLMEBOT_API_KEY && process.env.CALLMEBOT_API_KEY !== "YOUR_CALLMEBOT_KEY"),
-    smsConfigured:       !!(process.env.SMS_GATEWAY_URL   && process.env.SMS_GATEWAY_URL   !== "http://YOUR_PHONE_IP:8080"),
-    timestamp:           new Date().toISOString(),
-  });
-});
+app.get("/api/stocks", (req, res) =>
+  res.json({ stocks: Object.values(stockPrices), updatedAt: lastPriceUpdate })
+);
 
-// All stock prices
-app.get("/api/stocks", (req, res) => {
-  res.json({ stocks: Object.values(stockPrices), updatedAt: lastPriceUpdate });
-});
-
-// Single stock
 app.get("/api/stocks/:symbol", (req, res) => {
-  const stock = stockPrices[req.params.symbol.toUpperCase()];
-  if (!stock) return res.status(404).json({ error: "Stock not found" });
-  res.json(stock);
+  const s = stockPrices[req.params.symbol.toUpperCase()];
+  return s ? res.json(s) : res.status(404).json({ error: "Stock not found" });
 });
 
-// List alerts
 app.get("/api/alerts", (req, res) => {
-  const list = req.query.phone
-    ? alerts.filter((a) => a.phone === req.query.phone)
-    : alerts;
+  const list = req.query.phone ? alerts.filter((a) => a.phone === req.query.phone) : alerts;
   res.json({ alerts: list });
 });
 
-// Create alert
 app.post("/api/alerts", (req, res) => {
   const { symbol, type, value, channel, phone } = req.body;
 
   if (!symbol || !type || value === undefined || !channel || !phone)
-    return res.status(400).json({ error: "Required: symbol, type, value, channel, phone" });
+    return res.status(400).json({ error: "Required fields: symbol, type, value, channel, phone" });
   if (!stockPrices[symbol.toUpperCase()])
     return res.status(400).json({ error: `Unknown symbol: ${symbol}` });
   if (!["above","below","change_up","change_down"].includes(type))
@@ -302,23 +309,15 @@ app.post("/api/alerts", (req, res) => {
     return res.status(400).json({ error: "channel must be: whatsapp, sms, both" });
 
   const alert = {
-    id:        uuidv4(),
-    symbol:    symbol.toUpperCase(),
-    type,
-    value:     parseFloat(value),
-    channel,
-    phone,
-    fired:     false,
-    createdAt: new Date().toISOString(),
-    firedAt:   null,
+    id: uuidv4(), symbol: symbol.toUpperCase(), type,
+    value: parseFloat(value), channel, phone,
+    fired: false, createdAt: new Date().toISOString(), firedAt: null,
   };
-
   alerts.push(alert);
-  console.log(`➕ Alert created: ${alert.symbol} | ${alert.type} | ${alert.value} → ${phone}`);
+  console.log(`Alert created: ${alert.symbol} | ${alert.type} | ${alert.value} -> ${phone}`);
   res.status(201).json({ alert, message: "Alert created successfully" });
 });
 
-// Delete alert
 app.delete("/api/alerts/:id", (req, res) => {
   const before = alerts.length;
   alerts = alerts.filter((a) => a.id !== req.params.id);
@@ -326,23 +325,19 @@ app.delete("/api/alerts/:id", (req, res) => {
   res.json({ message: "Alert deleted" });
 });
 
-// Triggered history
 app.get("/api/triggered", (req, res) => {
-  const list = req.query.phone
-    ? triggeredLog.filter((t) => t.phone === req.query.phone)
-    : triggeredLog;
+  const list = req.query.phone ? triggeredLog.filter((t) => t.phone === req.query.phone) : triggeredLog;
   res.json({ triggered: list });
 });
 
-// Send test notification
 app.post("/api/test-notification", async (req, res) => {
   const { phone, channel } = req.body;
   if (!phone || !channel)
     return res.status(400).json({ error: "phone and channel required" });
 
-  const time   = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-  const waMsg  = `✅ *NSE AlertBot — Test Message*\n\nYour WhatsApp alerts are working! 🎉\nYou will receive real NSE stock alerts on this number.\n\n_${time}_`;
-  const smsMsg = `NSE AlertBot Test: Your SMS alerts are working! You will receive real NSE stock price alerts here.`;
+  const ist    = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  const waMsg  = `✅ NSE AlertBot - Test Message\n\nYour WhatsApp alerts are working!\nYou will receive real NSE stock alerts on this number.\n\nTime: ${ist}`;
+  const smsMsg = `NSE AlertBot Test: Your SMS alerts are working! Real NSE stock alerts will be sent here.`;
 
   const results = {};
   if (channel === "whatsapp" || channel === "both") results.whatsapp = await sendWhatsApp(phone, waMsg);
@@ -351,12 +346,41 @@ app.post("/api/test-notification", async (req, res) => {
   res.json({ success: true, results });
 });
 
-// ─── Start Server ─────────────────────────────────────────────────────────────
+// Webhook verification for Meta WhatsApp (required by Meta)
+app.get("/webhook", (req, res) => {
+  const mode      = req.query["hub.mode"];
+  const token     = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
+    console.log("Meta webhook verified");
+    res.status(200).send(challenge);
+  } else {
+    res.sendStatus(403);
+  }
+});
+
+// Webhook receiver for incoming WhatsApp messages (optional)
+app.post("/webhook", (req, res) => {
+  const body = req.body;
+  if (body.object === "whatsapp_business_account") {
+    body.entry?.forEach((entry) => {
+      entry.changes?.forEach((change) => {
+        const msg = change.value?.messages?.[0];
+        if (msg) {
+          console.log(`Incoming WhatsApp from ${msg.from}: ${msg.text?.body}`);
+        }
+      });
+    });
+  }
+  res.sendStatus(200);
+});
+
 app.listen(PORT, () => {
-  const waOk  = process.env.CALLMEBOT_API_KEY && process.env.CALLMEBOT_API_KEY !== "YOUR_CALLMEBOT_KEY";
-  const smsOk = process.env.SMS_GATEWAY_URL   && process.env.SMS_GATEWAY_URL   !== "http://YOUR_PHONE_IP:8080";
-  console.log(`\n🚀 NSE Alert Backend  →  http://localhost:${PORT}`);
-  console.log(`📊 Tracking ${NSE_STOCKS.length} NSE stocks  |  checks every 60 seconds`);
-  console.log(`💬 WhatsApp (CallMeBot): ${waOk  ? "✅ Ready" : "⚠️  Mock mode — set CALLMEBOT_API_KEY in .env"}`);
-  console.log(`📱 SMS (Android GW):     ${smsOk ? "✅ Ready" : "⚠️  Mock mode — set SMS_GATEWAY_URL in .env"}\n`);
+  const waOk  = process.env.META_WHATSAPP_TOKEN  && process.env.META_WHATSAPP_TOKEN  !== "YOUR_META_TOKEN";
+  const smsOk = process.env.SMS_GATEWAY_URL       && process.env.SMS_GATEWAY_URL      !== "http://YOUR_PHONE_IP:8080";
+  console.log(`\nNSE Alert Backend  ->  http://localhost:${PORT}`);
+  console.log(`Tracking ${NSE_STOCKS.length} NSE stocks | checks every 60 seconds`);
+  console.log(`WhatsApp (Meta API): ${waOk  ? "Ready" : "Mock mode - set META keys in .env"}`);
+  console.log(`SMS (Android GW):    ${smsOk ? "Ready" : "Mock mode - set SMS_GATEWAY_URL in .env"}\n`);
 });

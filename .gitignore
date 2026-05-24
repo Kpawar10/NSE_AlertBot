@@ -1,6 +1,7 @@
 # ── SECRET FILES — NEVER COMMIT THESE ────────────────────────
 .env
 backend/.env
+backend/.env.example
 frontend/.env
 frontend/.env.local
 frontend/.env.production
