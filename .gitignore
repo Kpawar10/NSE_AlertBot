@@ -1,0 +1,29 @@
+# ── SECRET FILES — NEVER COMMIT THESE ────────────────────────
+.env
+backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# ── Dependencies ───────────────────────────────────────────────
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# ── Build output ───────────────────────────────────────────────
+frontend/build/
+dist/
+
+# ── Logs ───────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+logs/
+
+# ── OS files ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
