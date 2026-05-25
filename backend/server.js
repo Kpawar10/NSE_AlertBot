@@ -94,6 +94,11 @@ function formatINR(n) {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
   });
 }
+function normalizePhone(phone) {
+  return String(phone)
+    .replace(/\s/g, "")
+    .replace(/^\+/, "");
+}
 
 // ─── Price Simulation ─────────────────────────────────────────────────────────
 function simulatePrices() {
@@ -258,7 +263,7 @@ async function fireAlert(alert, stock) {
     whatsappMessage: waMsg,
     smsMessage:      smsMsg,
     channel:         alert.channel,
-    phone:           alert.phone,
+    phone: normalizePhone(alert.phone),
     results,
     firedAt:         new Date().toISOString(),
   };
@@ -323,7 +328,11 @@ app.get("/api/stocks/:symbol", (req, res) => {
 });
 
 app.get("/api/alerts", (req, res) => {
-  const list = req.query.phone ? alerts.filter((a) => a.phone === req.query.phone) : alerts;
+  const list = req.query.phone
+  ? alerts.filter(
+      (a) => a.phone === normalizePhone(req.query.phone)
+    )
+  : alerts;
   res.json({ alerts: list });
 });
 
@@ -341,7 +350,7 @@ app.post("/api/alerts", async (req, res) => {
 
   const alert = {
     id: uuidv4(), symbol: symbol.toUpperCase(), type,
-    value: parseFloat(value), channel, phone,
+    value: parseFloat(value), channel, phone: normalizePhone(phone),
     fired: false, createdAt: new Date().toISOString(), firedAt: null,
   };
   alerts.push(alert);
@@ -359,7 +368,11 @@ app.delete("/api/alerts/:id", async (req, res) => {
 });
 
 app.get("/api/triggered", (req, res) => {
-  const list = req.query.phone ? triggeredLog.filter((t) => t.phone === req.query.phone) : triggeredLog;
+  const list = req.query.phone
+  ? triggeredLog.filter(
+      (t) => t.phone === normalizePhone(req.query.phone)
+    )
+  : triggeredLog;
   res.json({ triggered: list });
 });
 
