@@ -13,6 +13,8 @@ const cors           = require("cors");
 const cron           = require("node-cron");
 const { v4: uuidv4 } = require("uuid");
 const axios          = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -21,8 +23,33 @@ app.use(cors({ origin: process.env.FRONTEND_URL || "*" }));
 app.use(express.json());
 
 // ─── In-Memory Store ──────────────────────────────────────────────────────────
-let alerts          = [];
-let triggeredLog    = [];
+const DATA_FILE = path.join(__dirname, "data.json");
+
+let alerts = [];
+let triggeredLog = [];
+
+async function loadData() {
+  try {
+    const data = await fs.readJson(DATA_FILE);
+
+    alerts = data.alerts || [];
+    triggeredLog = data.triggeredLog || [];
+
+    console.log("Data loaded");
+  } catch {
+    alerts = [];
+    triggeredLog = [];
+
+    await saveData();
+  }
+}
+
+async function saveData() {
+  await fs.writeJson(DATA_FILE, {
+    alerts,
+    triggeredLog
+  });
+}
 let stockPrices     = {};
 let lastPriceUpdate = null;
 
@@ -236,7 +263,7 @@ async function fireAlert(alert, stock) {
     firedAt:         new Date().toISOString(),
   };
   triggeredLog.unshift(entry);
-
+  await saveData();
   console.log(`ALERT FIRED: ${alert.symbol} | ${alert.type} | target: ${alert.value}`);
   return entry;
 }
@@ -265,8 +292,12 @@ cron.schedule("* * * * *", async () => {
   simulatePrices();
   await checkAlerts();
 });
-simulatePrices();
-checkAlerts();
+(async () => {
+  await loadData();
+
+  simulatePrices();
+  checkAlerts();
+})();
 
 // ─── REST API ─────────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => res.json({
@@ -296,7 +327,7 @@ app.get("/api/alerts", (req, res) => {
   res.json({ alerts: list });
 });
 
-app.post("/api/alerts", (req, res) => {
+app.post("/api/alerts", async (req, res) => {
   const { symbol, type, value, channel, phone } = req.body;
 
   if (!symbol || !type || value === undefined || !channel || !phone)
@@ -314,13 +345,15 @@ app.post("/api/alerts", (req, res) => {
     fired: false, createdAt: new Date().toISOString(), firedAt: null,
   };
   alerts.push(alert);
+  await saveData();
   console.log(`Alert created: ${alert.symbol} | ${alert.type} | ${alert.value} -> ${phone}`);
   res.status(201).json({ alert, message: "Alert created successfully" });
 });
 
-app.delete("/api/alerts/:id", (req, res) => {
+app.delete("/api/alerts/:id", async (req, res) => {
   const before = alerts.length;
   alerts = alerts.filter((a) => a.id !== req.params.id);
+  await saveData();
   if (alerts.length === before) return res.status(404).json({ error: "Alert not found" });
   res.json({ message: "Alert deleted" });
 });
