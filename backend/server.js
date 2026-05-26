@@ -127,49 +127,24 @@ function simulatePrices() {
 // Docs: https://developers.facebook.com/docs/whatsapp/cloud-api
 
 async function sendWhatsApp(toPhone, message) {
-  const token         = process.env.META_WHATSAPP_TOKEN;
-  const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
-
-  // Mock mode if not configured
-  if (!token || token === "YOUR_META_TOKEN" || !phoneNumberId || phoneNumberId === "YOUR_PHONE_NUMBER_ID") {
-    console.log(`\n[WhatsApp MOCK - configure META keys in .env]\nTo: ${toPhone}\n${message}\n`);
+  const token  = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) {
+    console.log(`[MOCK]\nTo: ${toPhone}\n${message}`);
     return { success: true, mock: true };
   }
-
   try {
-    // Meta requires phone in international format without + (e.g. 919876543210)
-    const cleanPhone = toPhone.replace(/^\+/, "").replace(/\s/g, "");
-
-    const { data } = await axios.post(
-      `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
-      {
-        messaging_product: "whatsapp",
-        recipient_type:    "individual",
-        to:                cleanPhone,
-        type:              "text",
-        text: {
-          preview_url: false,
-          body:        message,
-        },
-      },
-      {
-        headers: {
-          Authorization:  `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 15000,
-      }
-    );
-
-    console.log(`WhatsApp sent to ${toPhone} | Message ID: ${data.messages?.[0]?.id}`);
-    return { success: true, messageId: data.messages?.[0]?.id };
+    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+      chat_id: chatId,
+      text: message
+    });
+    console.log(`Telegram sent to ${chatId}`);
+    return { success: true };
   } catch (err) {
-    const errMsg = err.response?.data?.error?.message || err.message;
-    console.error(`WhatsApp failed to ${toPhone}: ${errMsg}`);
-    return { success: false, error: errMsg };
+    console.error(`Telegram failed: ${err.message}`);
+    return { success: false, error: err.message };
   }
 }
-
 // ─── ANDROID SMS GATEWAY ──────────────────────────────────────────────────────
 // Free forever — your Android phone sends SMS using your own SIM card
 // App: "SMS Gateway for Android" by Igor Polishchuk (Play Store)
