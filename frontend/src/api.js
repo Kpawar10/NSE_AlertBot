@@ -2,7 +2,7 @@
  * API Service — All calls to the NSE Alert Backend
  */
 
-const BASE = process.env.REACT_APP_API_URL || "";
+const BASE = process.env.REACT_APP_API_URL || "https://nse-alertbot.onrender.com";
 async function request(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {
     method,
