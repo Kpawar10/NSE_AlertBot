@@ -101,24 +101,47 @@ function normalizePhone(phone) {
 }
 
 // ─── Price Simulation ─────────────────────────────────────────────────────────
-function simulatePrices() {
-  NSE_STOCKS.forEach((s) => {
-    const c     = stockPrices[s.symbol];
-    const drift = (Math.random() - 0.492) * 0.8;
-    const newPrice = Math.max(1, +(c.price * (1 + drift / 100)).toFixed(2));
-    stockPrices[s.symbol] = {
-      ...c,
-      price:     newPrice,
-      change:    +(newPrice - c.prevClose).toFixed(2),
-      changePct: +((newPrice - c.prevClose) / c.prevClose * 100).toFixed(2),
-      high:      Math.max(c.high, newPrice),
-      low:       Math.min(c.low,  newPrice),
-      volume:    c.volume + Math.floor(Math.random() * 10000),
-      updatedAt: new Date().toISOString(),
-    };
-  });
-  lastPriceUpdate = new Date().toISOString();
-  console.log(`[${new Date().toLocaleTimeString("en-IN")}] Prices updated`);
+async function simulatePrices() {
+  try {
+    const symbols = NSE_STOCKS.map(s => `${s.symbol}.NS`).join(",");
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
+    const { data } = await axios.get(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+      },
+      timeout: 10000
+    });
+
+    const quotes = data.quoteResponse?.result || [];
+    if (quotes.length === 0) {
+      console.log("Yahoo Finance returned no data, keeping previous prices");
+      return;
+    }
+
+    quotes.forEach((q) => {
+      const symbol = q.symbol.replace(".NS", "");
+      if (!stockPrices[symbol]) return;
+      const price     = q.regularMarketPrice      || stockPrices[symbol].price;
+      const prevClose = q.regularMarketPreviousClose || price;
+      stockPrices[symbol] = {
+        ...stockPrices[symbol],
+        price:     +price.toFixed(2),
+        prevClose: +prevClose.toFixed(2),
+        change:    +(price - prevClose).toFixed(2),
+        changePct: +(((price - prevClose) / prevClose) * 100).toFixed(2),
+        high:      +(q.regularMarketDayHigh  || price).toFixed(2),
+        low:       +(q.regularMarketDayLow   || price).toFixed(2),
+        volume:    q.regularMarketVolume     || stockPrices[symbol].volume,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    lastPriceUpdate = new Date().toISOString();
+    console.log(`[${new Date().toLocaleTimeString("en-IN")}] Real prices fetched from Yahoo Finance`);
+  } catch (err) {
+    console.error("Yahoo Finance fetch failed:", err.message);
+  }
 }
 
 // ─── META WHATSAPP CLOUD API ──────────────────────────────────────────────────
@@ -269,16 +292,14 @@ async function checkAlerts() {
 
 // ─── Cron: every 60 seconds ───────────────────────────────────────────────────
 cron.schedule("* * * * *", async () => {
-  simulatePrices();
+  await simulatePrices();
   await checkAlerts();
 });
 (async () => {
   await loadData();
-
-  simulatePrices();
-  checkAlerts();
+  await simulatePrices();
+  await checkAlerts();
 })();
-
 // ─── REST API ─────────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => res.json({
   status:             "ok",
