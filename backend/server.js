@@ -103,44 +103,51 @@ function normalizePhone(phone) {
 // ─── Price Simulation ─────────────────────────────────────────────────────────
 async function simulatePrices() {
   try {
-    const symbols = NSE_STOCKS.map(s => `${s.symbol}.NS`).join(",");
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
-    const { data } = await axios.get(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-      },
-      timeout: 10000
-    });
+    const results = await Promise.all(
+      NSE_STOCKS.map(async (s) => {
+        try {
+          const { data } = await axios.get(
+            `https://query2.finance.yahoo.com/v8/finance/chart/${s.symbol}.NS`,
+            {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json",
+              },
+              timeout: 10000,
+            }
+          );
+          const meta      = data?.chart?.result?.[0]?.meta;
+          if (!meta) return null;
+          const price     = meta.regularMarketPrice;
+          const prevClose = meta.chartPreviousClose || meta.previousClose || price;
+          return { symbol: s.symbol, price, prevClose };
+        } catch {
+          return null;
+        }
+      })
+    );
 
-    const quotes = data.quoteResponse?.result || [];
-    if (quotes.length === 0) {
-      console.log("Yahoo Finance returned no data, keeping previous prices");
-      return;
-    }
-
-    quotes.forEach((q) => {
-      const symbol = q.symbol.replace(".NS", "");
-      if (!stockPrices[symbol]) return;
-      const price     = q.regularMarketPrice      || stockPrices[symbol].price;
-      const prevClose = q.regularMarketPreviousClose || price;
+    let updated = 0;
+    results.forEach((r) => {
+      if (!r) return;
+      const { symbol, price, prevClose } = r;
       stockPrices[symbol] = {
         ...stockPrices[symbol],
         price:     +price.toFixed(2),
         prevClose: +prevClose.toFixed(2),
         change:    +(price - prevClose).toFixed(2),
         changePct: +(((price - prevClose) / prevClose) * 100).toFixed(2),
-        high:      +(q.regularMarketDayHigh  || price).toFixed(2),
-        low:       +(q.regularMarketDayLow   || price).toFixed(2),
-        volume:    q.regularMarketVolume     || stockPrices[symbol].volume,
+        high:      Math.max(stockPrices[symbol].high, +price.toFixed(2)),
+        low:       Math.min(stockPrices[symbol].low,  +price.toFixed(2)),
         updatedAt: new Date().toISOString(),
       };
+      updated++;
     });
 
     lastPriceUpdate = new Date().toISOString();
-    console.log(`[${new Date().toLocaleTimeString("en-IN")}] Real prices fetched from Yahoo Finance`);
+    console.log(`[${new Date().toLocaleTimeString("en-IN")}] Real prices updated for ${updated}/${NSE_STOCKS.length} stocks`);
   } catch (err) {
-    console.error("Yahoo Finance fetch failed:", err.message);
+    console.error("Price fetch failed:", err.message);
   }
 }
 
