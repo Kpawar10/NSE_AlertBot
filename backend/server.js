@@ -124,8 +124,8 @@ const NSE_STOCKS = [
   { symbol: "GAIL",          name: "GAIL India",                   basePrice: 212.00  },
   { symbol: "GODREJCP",      name: "Godrej Consumer Products",     basePrice: 1234.00 },
   { symbol: "HAVELLS",       name: "Havells India",                basePrice: 1678.00 },
-  { symbol: "ICICIlombard",  name: "ICICI Lombard Insurance",      basePrice: 1890.00 },
-  { symbol: "ICICIGI",       name: "ICICI Prudential Life",        basePrice: 712.00  },
+  { symbol: "ICICIPRULI",    name: "ICICI Prudential Life",        basePrice: 712.00  },
+  { symbol: "ICICIGI",       name: "ICICI Lombard Insurance",      basePrice: 1890.00 },
   { symbol: "INDIGO",        name: "IndiGo (InterGlobe Aviation)", basePrice: 4234.00 },
   { symbol: "IOC",           name: "Indian Oil Corporation",       basePrice: 156.00  },
   { symbol: "IRCTC",         name: "Indian Railway Catering",      basePrice: 812.00  },
@@ -183,7 +183,7 @@ const NSE_STOCKS = [
   { symbol: "GODREJPROP",    name: "Godrej Properties",            basePrice: 2345.00 },
   { symbol: "HINDPETRO",     name: "Hindustan Petroleum",          basePrice: 389.00  },
   { symbol: "IDBI",          name: "IDBI Bank",                    basePrice: 89.00   },
-  { symbol: "IGLCORP",       name: "Indraprastha Gas",             basePrice: 456.00  },
+  { symbol: "IGL",           name: "Indraprastha Gas",             basePrice: 456.00  },
   { symbol: "INDUSTOWER",    name: "Indus Towers",                 basePrice: 356.00  },
   { symbol: "KPITTECH",      name: "KPIT Technologies",            basePrice: 1456.00 },
   { symbol: "LUPIN",         name: "Lupin Ltd",                    basePrice: 2012.00 },
@@ -219,6 +219,14 @@ const NSE_STOCKS = [
   { symbol: "EXIDEIND",      name: "Exide Industries",             basePrice: 456.00  },
   { symbol: "MGL",           name: "Mahanagar Gas",                basePrice: 1234.00 },
   { symbol: "TVSMOTOR",      name: "TVS Motor Company",            basePrice: 2345.00 },
+
+  // ── BROAD MARKET INDICES ──────────────────────────────────────────────────
+  { symbol: "^CNX100",       name: "NIFTY 100",                    basePrice: 25141.80 },
+  { symbol: "^CNX200",       name: "NIFTY 200",                    basePrice: 13918.25 },
+  { symbol: "^CNX500",       name: "NIFTY 500",                    basePrice: 23109.70 },
+  { symbol: "NIFTYMIDCAP50.NS", name: "NIFTY MIDCAP 50",          basePrice: 17659.65 },
+  { symbol: "^CNXMIDCAP",    name: "NIFTY MIDCAP 100",            basePrice: 62123.35 },
+  { symbol: "^CNXSCAP",      name: "NIFTY SMALLCAP 100",          basePrice: 18623.20 },
 ];
 
 NSE_STOCKS.forEach((s) => {
@@ -250,8 +258,13 @@ async function simulatePrices() {
     const results = await Promise.all(
       NSE_STOCKS.map(async (s) => {
         try {
+          // Indices start with ^ or have full symbol, stocks need .NS
+          const yahooSymbol = s.symbol.startsWith("^") || s.symbol.includes(".")
+            ? s.symbol
+            : `${s.symbol}.NS`;
+
           const { data } = await axios.get(
-            `https://query2.finance.yahoo.com/v8/finance/chart/${s.symbol}.NS`,
+            `https://query2.finance.yahoo.com/v8/finance/chart/${yahooSymbol}`,
             {
               headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -294,7 +307,6 @@ async function simulatePrices() {
     console.error("Price fetch failed:", err.message);
   }
 }
-
 // ─── META WHATSAPP CLOUD API ──────────────────────────────────────────────────
 // Endpoint: https://graph.facebook.com/v19.0/PHONE_NUMBER_ID/messages
 // Free tier: 1000 conversations per month from Meta
