@@ -124,8 +124,8 @@ const NSE_STOCKS = [
   { symbol: "GAIL",          name: "GAIL India",                   basePrice: 212.00  },
   { symbol: "GODREJCP",      name: "Godrej Consumer Products",     basePrice: 1234.00 },
   { symbol: "HAVELLS",       name: "Havells India",                basePrice: 1678.00 },
-  { symbol: "ICICIlombard",  name: "ICICI Lombard Insurance",      basePrice: 1890.00 },
-  { symbol: "ICICIGI",       name: "ICICI Prudential Life",        basePrice: 712.00  },
+  { symbol: "ICICIPRULI",    name: "ICICI Prudential Life",        basePrice: 712.00  },
+  { symbol: "ICICIGI",       name: "ICICI Lombard Insurance",      basePrice: 1890.00 },
   { symbol: "INDIGO",        name: "IndiGo (InterGlobe Aviation)", basePrice: 4234.00 },
   { symbol: "IOC",           name: "Indian Oil Corporation",       basePrice: 156.00  },
   { symbol: "IRCTC",         name: "Indian Railway Catering",      basePrice: 812.00  },
@@ -183,7 +183,7 @@ const NSE_STOCKS = [
   { symbol: "GODREJPROP",    name: "Godrej Properties",            basePrice: 2345.00 },
   { symbol: "HINDPETRO",     name: "Hindustan Petroleum",          basePrice: 389.00  },
   { symbol: "IDBI",          name: "IDBI Bank",                    basePrice: 89.00   },
-  { symbol: "IGLCORP",       name: "Indraprastha Gas",             basePrice: 456.00  },
+  { symbol: "IGL",           name: "Indraprastha Gas",             basePrice: 456.00  },
   { symbol: "INDUSTOWER",    name: "Indus Towers",                 basePrice: 356.00  },
   { symbol: "KPITTECH",      name: "KPIT Technologies",            basePrice: 1456.00 },
   { symbol: "LUPIN",         name: "Lupin Ltd",                    basePrice: 2012.00 },
@@ -219,7 +219,16 @@ const NSE_STOCKS = [
   { symbol: "EXIDEIND",      name: "Exide Industries",             basePrice: 456.00  },
   { symbol: "MGL",           name: "Mahanagar Gas",                basePrice: 1234.00 },
   { symbol: "TVSMOTOR",      name: "TVS Motor Company",            basePrice: 2345.00 },
+
+  // ── BROAD MARKET INDICES ──────────────────────────────────────────────────
+  { symbol: "^CNX100",       name: "NIFTY 100",                    basePrice: 25141.80 },
+  { symbol: "^CNX200",       name: "NIFTY 200",                    basePrice: 13918.25 },
+  { symbol: "^CNX500",       name: "NIFTY 500",                    basePrice: 23109.70 },
+  { symbol: "NIFTYMIDCAP50.NS", name: "NIFTY MIDCAP 50",          basePrice: 17659.65 },
+  { symbol: "^CNXMIDCAP",    name: "NIFTY MIDCAP 100",            basePrice: 62123.35 },
+  { symbol: "^CNXSCAP",      name: "NIFTY SMALLCAP 100",          basePrice: 18623.20 },
 ];
+
 NSE_STOCKS.forEach((s) => {
   stockPrices[s.symbol] = {
     symbol: s.symbol, name: s.name,
